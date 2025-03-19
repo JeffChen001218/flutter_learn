@@ -1,19 +1,33 @@
 import 'dart:async';
 
 import 'package:after_layout/after_layout.dart';
+import 'package:base_project_flutter/widget/Paddings.dart';
 import 'package:base_project_flutter/widget/dev.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 import 'main.dart';
 
 // ============================ 列表组件示例 =====================================
 /**
-    ListView
-      对于保存滚动位置：
-        - 需要配置key和keepScrollOffset属性(在controller里)
-        - ListView 需要写在StatefulWidget中，且在 PageView 或 IndexedStack 里 恢复时才生效
-          如果通过Navigator.push加载（等于是重新加载），将不会保存滚动位置及状态
-        - （可以查看Demo5中配置，单但因为本示例是通过Navigator.push加载，不会保存上次滚动状态。配置代码可做参考）
+ *  ListView：
+ *    对于保存滚动位置：
+ *      - 需要配置key和keepScrollOffset属性(在controller里)
+ *      - ListView 需要写在StatefulWidget中，且在 PageView 或 IndexedStack 里 恢复时才生效
+ *        如果通过Navigator.push加载（等于是重新加载），将不会保存滚动位置及状态
+ *      - （可以查看Demo5中配置，单但因为本示例是通过Navigator.push加载，不会保存上次滚动状态。配置代码可做参考）
+ *  AnimatedList：
+ *    AnimatedList是StatefulWidget，可以通过key拿到其State，从而进行动画操作
+ *
+ *  动画：
+ *    可以通过嵌套的方式，同时实现多个动画效果，如：
+ *    ScaleTransition( // 缩放
+ *      scale: [animationValue],
+ *      child: FadeTransition( // 渐变
+ *        opacity: [animationValue],
+ *        child: MyWidget(),
+ *      ),
+ *    )
  */
 
 class Page10_scrollable_widget extends StatefulWidget {
@@ -57,6 +71,7 @@ class StatePage10 extends State<Page10_scrollable_widget> {
                 ListViewLoadMoreDemo4(),
               ),
               routeButton("ListView\n回到顶部", ListViewBackToTopDemo5()),
+              routeButton("AnimatedList\n实现item删除动画效果", AnimatedListDemo6()),
             ],
           ),
         ),
@@ -254,9 +269,7 @@ class ListViewBackToTopDemo5 extends StatefulWidget {
 
 class ListViewBackToTopDemo5State extends State<ListViewBackToTopDemo5>
     with AfterLayoutMixin<ListViewBackToTopDemo5> {
-  final scrollController = ScrollController(
-    keepScrollOffset: true
-  );
+  final scrollController = ScrollController(keepScrollOffset: true);
   var showBackTopBtn = false;
 
   @override
@@ -312,4 +325,92 @@ class ListViewBackToTopDemo5State extends State<ListViewBackToTopDemo5>
             )
             : null,
   );
+}
+
+class AnimatedListDemo6 extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => AnimatedListDemo6State();
+}
+
+class AnimatedListDemo6State extends State<AnimatedListDemo6> {
+  final datas = <String>[];
+  final animatedListKey = GlobalKey<AnimatedListState>();
+  var itemId = 0;
+
+  @override
+  void initState() {
+    setState(() {
+      datas.addAll(List.generate(5, (index) => "${++itemId}"));
+    });
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Column(
+      children: [
+        Expanded(
+          child: AnimatedList(
+            key: animatedListKey,
+            initialItemCount: datas.length,
+            itemBuilder: (context, index, animation) {
+              return buildItem(context, index, animation);
+            },
+          ),
+        ),
+        paddingBottom(
+          20,
+          child: FloatingActionButton(
+            onPressed: () {
+              onAdd(context);
+            },
+            child: Icon(Icons.add),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget buildItem(
+    BuildContext context,
+    int index,
+    Animation<double> animation,
+  ) {
+    var itemWidget = ListTile(
+      key: ValueKey(datas[index]),
+      title: Text("itemId - ${datas[index]}"),
+      trailing: IconButton(
+        onPressed: () {
+          onDelete(context, index);
+        },
+        icon: Icon(Icons.delete),
+      ),
+    );
+
+    // 这里用嵌套的方式实现多个动画效果 （缩放 + 渐变）
+    return SizeTransition(
+      sizeFactor: animation,
+      child: FadeTransition(opacity: animation, child: itemWidget),
+    );
+  }
+
+  void onAdd(BuildContext context) {
+    var insertIndex = (datas.length / 2).toInt();
+    // // 先插入数据
+    datas.insert(insertIndex, "${++itemId}");
+    // // 使用 AnimatedList的state 去更新数据，而不是调用 setState((){...})
+    animatedListKey.currentState!.insertItem(
+      insertIndex,
+      duration: Duration(milliseconds: 1000),
+    );
+    Fluttertoast.showToast(msg: "新增${insertIndex} - ${itemId}");
+  }
+
+  void onDelete(BuildContext context, int index) {
+    animatedListKey.currentState!.removeItem(
+      index,
+      duration: Duration(milliseconds: 1000),
+      (context, animation) => buildItem(context, index, animation),
+    );
+  }
 }
