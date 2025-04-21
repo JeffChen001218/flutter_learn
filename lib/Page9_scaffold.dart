@@ -106,18 +106,41 @@ class StatePage9 extends State<Page9_scaffold> {
     // =================== body 展示内容区域 用PageView实现左右滑动 ====================
     body: PageView(
       controller: pageController,
+      // allowImplicitScrolling: true,
       onPageChanged: (index) {
         setState(() {
           pageIndex = index; // 监听滑动，更新 BottomNavigationBar
         });
       },
-      children: const [
-        Center(child: Text("🏠 首页", style: TextStyle(fontSize: 24))),
-        Center(child: Text("📜 添加", style: TextStyle(fontSize: 24))),
-        Center(child: Text("🔍 发现", style: TextStyle(fontSize: 24))),
+      children: [
+        Center(child: Page(0, "🏠 首页")),
+        Center(child: Page(1, "📜 添加")),
+        Center(child: Page(2, "🔍 发现")),
+        Center(child: Page(3, "⭐ 收藏")),
       ],
     ),
   );
+}
+
+class Page extends StatefulWidget {
+  int index;
+  String text;
+
+  Page(this.index, this.text);
+
+  @override
+  State<StatefulWidget> createState() => _PageState();
+}
+
+class _PageState extends State<Page> with AutomaticKeepAliveClientMixin {
+  @override
+  Widget build(BuildContext context) {
+    print("build ${widget.index}");
+    return Text(widget.text, style: TextStyle(fontSize: 24));
+  }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class MyDrawer extends StatelessWidget {

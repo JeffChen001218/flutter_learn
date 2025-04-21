@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:after_layout/after_layout.dart';
 import 'package:base_project_flutter/widget/Paddings.dart';
+import 'package:base_project_flutter/widget/Sliver.dart';
 import 'package:base_project_flutter/widget/dev.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -28,6 +29,10 @@ import 'main.dart';
  *        child: MyWidget(),
  *      ),
  *    )
+ *
+ *  子页面缓存：（本例全部不生效，暂未找到原因:(）
+ *     方法1：PageView 构造函数 设置allowImplicitScrolling参数为true：实现作前后各缓存一个页面
+ *     方法2：PageView 子项 继承AutomaticKeepAliveClientMixin：覆写wantKeepAlive方法，当的返回值为true，可以实现子页面的缓存
  */
 
 class Page10_scrollable_widget extends StatefulWidget {
@@ -72,6 +77,19 @@ class StatePage10 extends State<Page10_scrollable_widget> {
               ),
               routeButton("ListView\n回到顶部", ListViewBackToTopDemo5()),
               routeButton("AnimatedList\n实现item删除动画效果", AnimatedListDemo6()),
+              routeButton("GridView\n宫格布局", GridListDemo7()),
+              routeButton(
+                "TabBar和PageView\n实现页面切换（其实使用TabBar和TabBarView组合更简单，可以共用同一个controller，不需要两者互相监听同步自己的索引变化）",
+                PageViewDemo8(),
+              ),
+              routeButton(
+                "CustomScrollView\n实现相邻两个列表滑动到末尾后，手势衔接（原理：使用公共的Scrollable和Viewport组合多个sliver）",
+                CustomScrollViewDemo9(),
+              ),
+              routeButton(
+                "吸顶Sliver示例（SliverAppBar和自定义SliverPersistentHeaderDelegate）",
+                SliverDemo10(),
+              ),
             ],
           ),
         ),
@@ -413,4 +431,339 @@ class AnimatedListDemo6State extends State<AnimatedListDemo6> {
       (context, animation) => buildItem(context, index, animation),
     );
   }
+}
+
+class GridListDemo7 extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => GridListDemo7State();
+}
+
+class GridListDemo7State extends State<GridListDemo7> {
+  final _children = [
+    Container(color: Colors.blue, child: Icon(Icons.ac_unit)),
+    Container(color: Colors.blue, child: Icon(Icons.airport_shuttle)),
+    Container(color: Colors.blue, child: Icon(Icons.all_inclusive)),
+    Container(color: Colors.blue, child: Icon(Icons.beach_access)),
+    Container(color: Colors.blue, child: Icon(Icons.cake)),
+    Container(color: Colors.blue, child: Icon(Icons.free_breakfast)),
+    Container(color: Colors.blue, child: Icon(Icons.abc_sharp)),
+    Container(color: Colors.blue, child: Icon(Icons.access_alarm)),
+  ];
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: Colors.white,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        paddingTop(24),
+        InfoText("=============== 固定数量 ==============="),
+        InfoText(
+          "GridView(gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: ...), ...)\n"
+          "或 GridView.count(crossAxisCount: ...)",
+        ),
+        Container(
+          color: Colors.amber,
+          child: GridView(
+            // 自适应高度
+            shrinkWrap: true,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 1,
+              crossAxisSpacing: 10,
+              childAspectRatio: 3 / 2,
+            ),
+            children: _children,
+          ),
+        ),
+        InfoText("========== 设置item最大主轴方向长度，自动计算 =========="),
+        InfoText(
+          "GridView(gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: ...), ...)\n"
+          "或 GridView.extend(maxCrossAxisExtent: ...)",
+        ),
+        Container(
+          color: Colors.amber,
+          child: GridView(
+            // 自适应高度
+            shrinkWrap: true,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+            ),
+            children: _children,
+          ),
+        ),
+        InfoText("========== 构造器实现item（GridView.builder） =========="),
+        InfoText(
+          "通过 MediaQuery.removePadding(removeTop: true, ...)移除 GridView顶部的默认padding",
+        ),
+        Container(
+          color: Colors.amber,
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: GridView.builder(
+              // 自适应高度
+              shrinkWrap: true,
+              itemCount: 11,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                childAspectRatio: 3 / 1,
+              ),
+              itemBuilder: (context, index) {
+                return SizedBox.shrink(child: InfoText("index-${index}"));
+              },
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class PageViewDemo8 extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => PageViewDemo8State();
+}
+
+class PageViewDemo8State extends State<PageViewDemo8>
+    with SingleTickerProviderStateMixin {
+  final PageController _pageController = PageController(
+    // keepPage: true,
+    initialPage: 0,
+  );
+  TabController? tabController = null;
+  int _currentPage = 0;
+
+  final List<PageData> _pages = [
+    PageData(color: Colors.blue, icon: Icons.star, title: '第一页'),
+    PageData(color: Colors.green, icon: Icons.favorite, title: '第二页'),
+    PageData(color: Colors.orange, icon: Icons.thumb_up, title: '第三页'),
+  ];
+
+  @override
+  void initState() {
+    tabController = TabController(length: _pages.length, vsync: this);
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _handlePageChanged(int index) {
+    tabController?.animateTo(
+      index,
+      duration: Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+    if (_currentPage != index) {
+      setState(() => _currentPage = index);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Material(
+    child: Column(
+      children: [
+        paddingTop(30),
+        TabBar(
+          controller: tabController,
+          tabs: [Tab(text: "Tab1"), Tab(text: "Tab2"), Tab(text: "Tab3")],
+          onTap:
+              (index) => {
+                _pageController.animateToPage(
+                  index,
+                  duration: Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                ),
+              },
+        ),
+        Expanded(
+          // 此处，其实使用TabBarView更合适，可以直接服用controller，不需要两个controller同步切换索引
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: _handlePageChanged,
+            // allowImplicitScrolling: true,
+            itemCount: _pages.length,
+            itemBuilder: (context, index) => ItemPage(index, _pages[index]),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class ItemPage extends StatefulWidget {
+  int index;
+  PageData pageData;
+
+  ItemPage(this.index, this.pageData);
+
+  @override
+  State<StatefulWidget> createState() => ItemPageState();
+}
+
+class ItemPageState extends State<ItemPage> with AutomaticKeepAliveClientMixin {
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    print("build page ${widget.index}");
+    return Container(
+      color: widget.pageData.color,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(widget.pageData.icon, size: 80, color: Colors.white),
+            const SizedBox(height: 20),
+            Text(
+              widget.pageData.title,
+              style: const TextStyle(
+                fontSize: 24,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}
+
+class PageData {
+  final Color color;
+  final IconData icon;
+  final String title;
+
+  const PageData({
+    required this.color,
+    required this.icon,
+    required this.title,
+  });
+}
+
+class CustomScrollViewDemo9 extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => CustomScrollViewDemo9State();
+}
+
+class CustomScrollViewDemo9State extends State<CustomScrollViewDemo9> {
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    // body: Column(
+    //   children: [
+    //     Expanded(
+    //       child: ListView(
+    //         children: List.generate(30, (index) => InfoText("列表1 - ${index}")),
+    //       ),
+    //     ),
+    //     Divider(color: Colors.grey),
+    //     Expanded(
+    //       child: ListView(
+    //         children: List.generate(
+    //           30,
+    //           (index) => InfoText(
+    //             "列表2 - ${String.fromCharCode('a'.codeUnitAt(0) + index)}",
+    //           ),
+    //         ),
+    //       ),
+    //     ),
+    //   ],
+    // ),
+    body: CustomScrollView(
+      slivers: [
+        SliverFixedExtentList(
+          itemExtent: 56,
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => Text("列表1 - ${index}"),
+            childCount: 20,
+          ),
+        ),
+        SliverFixedExtentList(
+          itemExtent: 56,
+          delegate: SliverChildBuilderDelegate(
+            (context, index) =>
+                Text("列表2 - ${String.fromCharCode('a'.codeUnitAt(0) + index)}"),
+            childCount: 20,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class SliverDemo10 extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Material(
+    child: CustomScrollView(
+      slivers: <Widget>[
+        // AppBar，包含一个导航栏.
+        SliverAppBar(
+          pinned: true, // 滑动到顶端时会固定住
+          expandedHeight: 250.0,
+          flexibleSpace: FlexibleSpaceBar(
+            title: const Text('Demo'),
+            background: Image.network(
+              "https://picsum.photos/1200/900",
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(8.0),
+          sliver: SliverGrid(
+            //Grid
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2, //Grid按两列显示
+              mainAxisSpacing: 10.0,
+              crossAxisSpacing: 10.0,
+              childAspectRatio: 4.0,
+            ),
+            delegate: SliverChildBuilderDelegate((
+              BuildContext context,
+              int index,
+            ) {
+              //创建子widget
+              return Container(
+                alignment: Alignment.center,
+                color: Colors.cyan[100 * (index % 9)],
+                child: Text('grid item $index'),
+              );
+            }, childCount: 20),
+          ),
+        ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: SliverHeaderDelegate.builder(
+            extentMax: 60,
+            extentMin: 30,
+            child: Container(
+              color: Colors.red,
+              child: Center(child: Text("SliverPersistentHeader实现滑动到顶部吸附")),
+            ),
+          ),
+        ),
+        SliverFixedExtentList(
+          itemExtent: 50.0,
+          delegate: SliverChildBuilderDelegate((
+            BuildContext context,
+            int index,
+          ) {
+            //创建列表项
+            return Container(
+              alignment: Alignment.center,
+              color: Colors.lightBlue[100 * (index % 9)],
+              child: Text('list item $index'),
+            );
+          }, childCount: 20),
+        ),
+      ],
+    ),
+  );
 }
